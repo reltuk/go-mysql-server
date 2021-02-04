@@ -112,7 +112,7 @@ func Parse(ctx *sql.Context, query string) (sql.Node, error) {
 	span, ctx := ctx.Span("parse", opentracing.Tag{Key: "query", Value: query})
 	defer span.Finish()
 
-	s := strings.TrimSpace(removeComments(query))
+	s := query //strings.TrimSpace(removeComments(query))
 	if strings.HasSuffix(s, ";") {
 		s = s[:len(s)-1]
 	}
