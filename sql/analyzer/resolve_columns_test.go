@@ -16,7 +16,6 @@ package analyzer
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -106,8 +105,7 @@ func TestQualifyVariables(t *testing.T) {
 	)
 	col, ok := node.Projections[0].(*expression.UnresolvedColumn)
 	assert.True(ok)
-	assert.Truef(strings.HasPrefix(col.Name(), "@@") || strings.HasPrefix(col.Table(), "@@"),
-		"@@max_allowed_packet is not global or session column")
+	assert.Truef(isSystemVariable(col), "@@max_allowed_packet is not global or session column")
 
 	expected := plan.NewProject(
 		[]sql.Expression{
@@ -128,8 +126,7 @@ func TestQualifyVariables(t *testing.T) {
 	)
 	col, ok = node.Projections[0].(*expression.UnresolvedColumn)
 	assert.True(ok)
-	assert.Truef(strings.HasPrefix(col.Name(), "@@") || strings.HasPrefix(col.Table(), "@@"),
-		"@@autocommit is not global or session column")
+	assert.Truef(isSystemVariable(col), "@@autocommit is not global or session column")
 
 	expected = plan.NewProject(
 		[]sql.Expression{
@@ -622,15 +619,15 @@ func TestResolveColumnsSession(t *testing.T) {
 	require := require.New(t)
 
 	ctx := sql.NewContext(context.Background(), sql.WithSession(sql.NewBaseSession()))
-	err := ctx.SetUserVariable(ctx, "foo_bar", int64(42))
+	err := ctx.Set(ctx, "foo_bar", sql.Int64, int64(42))
 	require.NoError(err)
-	err = ctx.SetSessionVariable(ctx, "autocommit", true)
+	err = ctx.Set(ctx, "autocommit", sql.Boolean, true)
 	require.NoError(err)
 
 	node := plan.NewProject(
 		[]sql.Expression{
-			uc("@foo_bar"),
-			uc("@bar_baz"),
+			uc("@@foo_bar"),
+			uc("@@bar_baz"),
 			uc("@@autocommit"),
 			uc("@myvar"),
 		},
@@ -642,9 +639,9 @@ func TestResolveColumnsSession(t *testing.T) {
 
 	expected := plan.NewProject(
 		[]sql.Expression{
-			expression.NewUserVar("foo_bar"),
-			expression.NewUserVar("bar_baz"),
-			expression.NewSystemVar("autocommit", sql.SystemVariableScope_Session),
+			expression.NewSystemVar("foo_bar", sql.Int64),
+			expression.NewSystemVar("bar_baz", sql.Null),
+			expression.NewSystemVar("autocommit", sql.Boolean),
 			expression.NewUserVar("myvar"),
 		},
 		plan.NewResolvedTable(dualTable, nil, nil),

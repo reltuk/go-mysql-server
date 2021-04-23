@@ -166,13 +166,15 @@ func (iter *callIter) Close(ctx *sql.Context) error {
 			}
 			switch callParam := iter.call.Params[i].(type) {
 			case *expression.UserVar:
-				err = ctx.SetUserVariable(ctx, callParam.Name, val)
+				err = ctx.Set(ctx, callParam.Name, param.Type, val)
 				if err != nil {
 					return err
 				}
 			case *expression.SystemVar:
-				// This should have been caught by the analyzer, so a major bug exists somewhere
-				return fmt.Errorf("unable to set `%s` as it is a system variable", callParam.Name)
+				err = ctx.Set(ctx, callParam.Name, param.Type, val)
+				if err != nil {
+					return err
+				}
 			case *expression.ProcedureParam:
 				err = callParam.Set(val, param.Type)
 				if err != nil {
@@ -184,13 +186,15 @@ func (iter *callIter) Close(ctx *sql.Context) error {
 			// If the var had a value before the call then it is basically removed.
 			switch callParam := iter.call.Params[i].(type) {
 			case *expression.UserVar:
-				err = ctx.SetUserVariable(ctx, callParam.Name, nil)
+				err := ctx.Set(ctx, callParam.Name, param.Type, nil)
 				if err != nil {
 					return err
 				}
 			case *expression.SystemVar:
-				// This should have been caught by the analyzer, so a major bug exists somewhere
-				return fmt.Errorf("unable to set `%s` as it is a system variable", callParam.Name)
+				err := ctx.Set(ctx, callParam.Name, param.Type, nil)
+				if err != nil {
+					return err
+				}
 			case *expression.ProcedureParam:
 				err := callParam.Set(nil, param.Type)
 				if err != nil {

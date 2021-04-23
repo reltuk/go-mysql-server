@@ -153,21 +153,15 @@ func (l *LoadData) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 
 	var fileName string
 	if l.Local {
-		localInfile, err := ctx.GetSessionVariable(ctx, "local_infile")
-		if err != nil {
-			return nil, err
-		}
+		_, localInfile := ctx.Get("local_infile")
 		if localInfile.(int8) == 0 {
 			return nil, fmt.Errorf("local_infile needs to be set to 1 to use LOCAL")
 		}
 
-		tmpdir, err := ctx.GetSessionVariable(ctx, "tmpdir")
+		_, tmpdir := ctx.Get("tmpdir")
 		fileName = tmpdir.(string) + TmpfileName
 	} else {
-		dir, err := ctx.GetSessionVariable(ctx, "secure_file_priv")
-		if err != nil {
-			return nil, err
-		}
+		_, dir := ctx.Get("secure_file_priv")
 		if dir == nil {
 			return nil, sql.ErrSecureFileDirNotSet.New()
 		}

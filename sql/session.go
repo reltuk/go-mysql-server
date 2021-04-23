@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -54,23 +54,18 @@ type Session interface {
 	Address() string
 	// User of the session.
 	Client() Client
-	// SetSessionVariable sets the given system variable to the value given for this session.
-	SetSessionVariable(ctx *Context, sysVarName string, value interface{}) error
-	// SetUserVariable sets the given user variable to the value given for this session, or creates it for this session.
-	SetUserVariable(ctx *Context, varName string, value interface{}) error
-	// GetSessionVariable returns this session's value of the system variable with the given name.
-	GetSessionVariable(ctx *Context, sysVarName string) (interface{}, error)
-	// GetUserVariable returns this session's value of the user variable with the given name, along with its most
-	// appropriate type.
-	GetUserVariable(ctx *Context, varName string) (Type, interface{}, error)
-	// GetAllSessionVariables returns a copy of all session variable values.
-	GetAllSessionVariables() map[string]interface{}
+	// Set session configuration.
+	Set(ctx context.Context, key string, typ Type, value interface{}) error
+	// Get session configuration.
+	Get(key string) (Type, interface{})
 	// GetCurrentDatabase gets the current database for this session
 	GetCurrentDatabase() string
 	// SetDefaultDatabase sets the current database for this session
 	SetCurrentDatabase(dbName string)
 	// CommitTransaction commits the current transaction for this session for the current database
 	CommitTransaction(ctx *Context, dbName string) error
+	// GetAll returns a copy of session configuration
+	GetAll() map[string]TypedValue
 	// ID returns the unique ID of the connection.
 	ID() uint32
 	// Warn stores the warning in the session.
@@ -105,16 +100,13 @@ type BaseSession struct {
 	currentDB     string
 	client        Client
 	mu            *sync.RWMutex
-	systemVars    map[string]interface{}
-	userVars      map[string]interface{}
+	config        map[string]TypedValue
 	warnings      []*Warning
 	warncnt       uint16
 	locks         map[string]bool
 	queriedDb     string
 	lastQueryInfo map[string]int64
 }
-
-var _ Session = (*BaseSession)(nil)
 
 // CommitTransaction commits the current transaction for the current database.
 func (s *BaseSession) CommitTransaction(*Context, string) error {
@@ -128,64 +120,36 @@ func (s *BaseSession) Address() string { return s.addr }
 // Client returns session's client information.
 func (s *BaseSession) Client() Client { return s.client }
 
-// GetAllSessionVariables implements the Session interface.
-func (s *BaseSession) GetAllSessionVariables() map[string]interface{} {
-	m := make(map[string]interface{})
+// Set implements the Session interface.
+func (s *BaseSession) Set(ctx context.Context, key string, typ Type, value interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.config[key] = TypedValue{typ, value}
+	return nil
+}
+
+// Get implements the Session interface.
+func (s *BaseSession) Get(key string) (Type, interface{}) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.config[key]
+	if !ok {
+		return Null, nil
+	}
+
+	return v.Typ, v.Value
+}
+
+// GetAll returns a copy of session configuration
+func (s *BaseSession) GetAll() map[string]TypedValue {
+	m := make(map[string]TypedValue)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	for k, v := range s.systemVars {
+	for k, v := range s.config {
 		m[k] = v
 	}
 	return m
-}
-
-// SetSessionVariable implements the Session interface.
-func (s *BaseSession) SetSessionVariable(ctx *Context, sysVarName string, value interface{}) error {
-	sysVar, _, ok := SystemVariables.GetGlobal(sysVarName)
-	if !ok {
-		return ErrUnknownSystemVariable.New(sysVarName)
-	}
-	if sysVar.Scope == SystemVariableScope_Global {
-		return ErrSystemVariableGlobalOnly.New(sysVarName)
-	}
-	if !sysVar.Dynamic {
-		return ErrSystemVariableReadOnly.New(sysVarName)
-	}
-	convertedVal, err := sysVar.Type.Convert(value)
-	if err != nil {
-		return err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.systemVars[sysVar.Name] = convertedVal
-	return nil
-}
-
-// SetUserVariable implements the Session interface.
-func (s *BaseSession) SetUserVariable(ctx *Context, varName string, value interface{}) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.userVars[strings.ToLower(varName)] = value
-	return nil
-}
-
-// GetSessionVariable implements the Session interface.
-func (s *BaseSession) GetSessionVariable(ctx *Context, sysVarName string) (interface{}, error) {
-	val, ok := s.systemVars[strings.ToLower(sysVarName)]
-	if !ok {
-		return nil, ErrUnknownSystemVariable.New(sysVarName)
-	}
-	return val, nil
-}
-
-// GetUserVariable implements the Session interface.
-func (s *BaseSession) GetUserVariable(ctx *Context, varName string) (Type, interface{}, error) {
-	val, ok := s.userVars[strings.ToLower(varName)]
-	if !ok {
-		return Null, nil, nil
-	}
-	return ApproximateTypeFromValue(val), val, nil
 }
 
 // GetCurrentDatabase gets the current database for this session
@@ -305,6 +269,34 @@ type (
 	}
 )
 
+// DefaultSessionConfig returns default values for session variables
+// TODO: allow integrators to specify defaults for their system variables
+func DefaultSessionConfig() map[string]TypedValue {
+	return map[string]TypedValue{
+		"auto_increment_increment": TypedValue{Int64, int64(1)},
+		"time_zone":                TypedValue{LongText, "SYSTEM"},
+		"system_time_zone":         TypedValue{LongText, time.Now().UTC().Location().String()},
+		"max_allowed_packet":       TypedValue{Int32, math.MaxInt32},
+		"sql_mode":                 TypedValue{LongText, ""},
+		"gtid_mode":                TypedValue{Int32, int32(0)},
+		"collation_database":       TypedValue{LongText, Collation_Default.String()},
+		"ndbinfo_version":          TypedValue{LongText, ""},
+		"sql_select_limit":         TypedValue{Int32, math.MaxInt32},
+		"transaction_isolation":    TypedValue{LongText, "READ UNCOMMITTED"},
+		"version":                  TypedValue{LongText, ""},
+		"version_comment":          TypedValue{LongText, ""},
+		"autocommit":               TypedValue{Int8, 0},
+		"character_set_client":     TypedValue{LongText, Collation_Default.CharacterSet().String()},
+		"character_set_connection": TypedValue{LongText, Collation_Default.CharacterSet().String()},
+		"character_set_results":    TypedValue{LongText, Collation_Default.CharacterSet().String()},
+		"collation_connection":     TypedValue{LongText, Collation_Default.String()},
+		"tmpdir":                   TypedValue{LongText, GetTmpdirSessionVar()},
+		"local_infile":             TypedValue{Int8, int8(0)},
+		"secure_file_priv":         TypedValue{LongText, nil},
+		"group_concat_max_len":     TypedValue{Int64, int64(1024)},
+	}
+}
+
 const (
 	RowCount     = "row_count"
 	FoundRows    = "found_rows"
@@ -350,31 +342,27 @@ func GetTmpdirSessionVar() string {
 }
 
 // HasDefaultValue checks if session variable value is the default one.
-func HasDefaultValue(ctx *Context, s Session, key string) (bool, interface{}) {
-	val, err := s.GetSessionVariable(ctx, key)
-	if err == nil {
-		sysVar, _, ok := SystemVariables.GetGlobal(key)
-		if ok {
-			return sysVar.Default == val, val
-		}
+func HasDefaultValue(s Session, key string) (bool, interface{}) {
+	typ, val := s.Get(key)
+	if cfg, ok := DefaultSessionConfig()[key]; ok {
+		return (cfg.Typ == typ && cfg.Value == val), val
 	}
-	return true, nil
+	return false, val
 }
 
 // NewSession creates a new session with data.
 func NewSession(server, client, user string, id uint32) Session {
 	return &BaseSession{
+		id:   id,
 		addr: server,
 		client: Client{
 			Address: client,
 			User:    user,
 		},
-		id:            id,
-		systemVars:    SystemVariables.NewSessionMap(),
-		userVars:      make(map[string]interface{}),
+		config:        DefaultSessionConfig(),
+		lastQueryInfo: defaultLastQueryInfo(),
 		mu:            &sync.RWMutex{},
 		locks:         make(map[string]bool),
-		lastQueryInfo: defaultLastQueryInfo(),
 	}
 }
 
@@ -385,8 +373,7 @@ var autoSessionIDs uint32 = 1
 func NewBaseSession() Session {
 	return &BaseSession{
 		id:            atomic.AddUint32(&autoSessionIDs, 1),
-		systemVars:    SystemVariables.NewSessionMap(),
-		userVars:      make(map[string]interface{}),
+		config:        DefaultSessionConfig(),
 		mu:            &sync.RWMutex{},
 		locks:         make(map[string]bool),
 		lastQueryInfo: defaultLastQueryInfo(),

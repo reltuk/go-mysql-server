@@ -76,30 +76,20 @@ func (s *ShowProcedureStatus) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIte
 		if procedure.SecurityContext == ProcedureSecurityContext_Invoker {
 			securityType = "INVOKER"
 		}
-		characterSetClient, err := ctx.GetSessionVariable(ctx, "character_set_client")
-		if err != nil {
-			return nil, err
-		}
-		collationConnection, err := ctx.GetSessionVariable(ctx, "collation_connection")
-		if err != nil {
-			return nil, err
-		}
-		collationServer, err := ctx.GetSessionVariable(ctx, "collation_server")
-		if err != nil {
-			return nil, err
-		}
+		_, characterSetClient := ctx.Get("character_set_client")
+		_, collationConnection := ctx.Get("collation_connection")
 		rows = append(rows, sql.Row{
-			s.db.Name(),                // Db
-			procedure.Name,             // Name
-			"PROCEDURE",                // Type
-			procedure.Definer,          // Definer
-			procedure.ModifiedAt.UTC(), // Modified
-			procedure.CreatedAt.UTC(),  // Created
-			securityType,               // Security_type
-			procedure.Comment,          // Comment
-			characterSetClient,         // character_set_client
-			collationConnection,        // collation_connection
-			collationServer,            // Database Collation
+			s.db.Name(),                    // Db
+			procedure.Name,                 // Name
+			"PROCEDURE",                    // Type
+			procedure.Definer,              // Definer
+			procedure.ModifiedAt.UTC(),     // Modified
+			procedure.CreatedAt.UTC(),      // Created
+			securityType,                   // Security_type
+			procedure.Comment,              // Comment
+			characterSetClient,             // character_set_client
+			collationConnection,            // collation_connection
+			sql.Collation_Default.String(), // Database Collation
 		})
 	}
 	return sql.RowsToRowIter(rows...), nil

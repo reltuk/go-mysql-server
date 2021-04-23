@@ -24,21 +24,18 @@ import (
 
 func TestSessionConfig(t *testing.T) {
 	require := require.New(t)
-	ctx := NewEmptyContext()
 
 	sess := NewSession("foo", "baz", "bar", 1)
-	typ, v, err := sess.GetUserVariable(ctx, "foo")
-	require.NoError(err)
+	typ, v := sess.Get("foo")
 	require.Equal(Null, typ)
 	require.Equal(nil, v)
 
-	err = sess.SetUserVariable(ctx, "foo", int64(1))
+	err := sess.Set(context.Background(), "foo", Int64, 1)
 	require.NoError(err)
 
-	typ, v, err = sess.GetUserVariable(ctx, "foo")
-	require.NoError(err)
+	typ, v = sess.Get("foo")
 	require.Equal(Int64, typ)
-	require.Equal(int64(1), v)
+	require.Equal(1, v)
 
 	require.Equal(uint16(0), sess.WarningCount())
 
@@ -55,13 +52,17 @@ func TestSessionConfig(t *testing.T) {
 
 func TestHasDefaultValue(t *testing.T) {
 	require := require.New(t)
-	ctx := NewEmptyContext()
 	sess := NewSession("foo", "baz", "bar", 1)
 
-	err := sess.SetSessionVariable(NewEmptyContext(), "auto_increment_increment", 123)
+	for key := range DefaultSessionConfig() {
+		require.True(HasDefaultValue(sess, key))
+	}
+
+	err := sess.Set(context.Background(), "auto_increment_increment", Int64, 123)
 	require.NoError(err)
-	require.False(HasDefaultValue(ctx, sess, "auto_increment_increment"))
-	require.True(HasDefaultValue(ctx, sess, "non_existing_key")) // Returns true for non-existent keys
+	require.False(HasDefaultValue(sess, "auto_increment_increment"))
+
+	require.False(HasDefaultValue(sess, "non_existing_key"))
 }
 
 type testNode struct{}

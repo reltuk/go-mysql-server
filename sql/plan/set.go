@@ -82,12 +82,12 @@ func (s *Set) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 
 		switch left := setField.Left.(type) {
 		case *expression.SystemVar:
-			err := setSystemVar(ctx, left, setField.Right, row)
+			_, err := setSystemVar(ctx, left, setField.Right, row)
 			if err != nil {
 				return nil, err
 			}
 		case *expression.UserVar:
-			err := setUserVar(ctx, left, setField.Right, row)
+			_, err := setUserVar(ctx, left, setField.Right, row)
 			if err != nil {
 				return nil, err
 			}
@@ -120,38 +120,51 @@ func (s *Set) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 	return sql.RowsToRowIter(resultRow), nil
 }
 
-func setUserVar(ctx *sql.Context, userVar *expression.UserVar, right sql.Expression, row sql.Row) error {
-	val, err := right.Eval(ctx, row)
+func setUserVar(ctx *sql.Context, userVar *expression.UserVar, right sql.Expression, row sql.Row) (interface{}, error) {
+	var (
+		value interface{}
+		err   error
+	)
+
+	var varName = userVar.Name
+
+	value, err = right.Eval(ctx, row)
 	if err != nil {
-		return  err
+		return nil, err
 	}
-	err = ctx.SetUserVariable(ctx, userVar.Name, val)
+
+	// TODO: differentiate between system and user vars here
+	err = ctx.Set(ctx, varName, right.Type(), value)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+
+	return value, nil
 }
 
-func setSystemVar(ctx *sql.Context, sysVar *expression.SystemVar, right sql.Expression, row sql.Row) error {
-	val, err := right.Eval(ctx, row)
+func setSystemVar(ctx *sql.Context, sysVar *expression.SystemVar, right sql.Expression, row sql.Row) (interface{}, error) {
+	var (
+		value interface{}
+		typ   sql.Type
+		err   error
+	)
+
+	var varName = sysVar.Name
+
+	// TODO: value checking for system variables. Each one has specific lists of acceptable values.
+	value, err = right.Eval(ctx, row)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	switch sysVar.Scope {
-	case sql.SystemVariableScope_Global:
-		err = sql.SystemVariables.SetGlobal(sysVar.Name, val)
-		if err != nil {
-			return err
-		}
-	case sql.SystemVariableScope_Session:
-		err = ctx.SetSessionVariable(ctx, sysVar.Name, val)
-		if err != nil {
-			return err
-		}
-	default: // should never be hit
-		return fmt.Errorf("unable to set `%s` due to unknown scope `%v`", sysVar.Name, sysVar.Scope)
+	typ = sysVar.Type()
+
+	// TODO: differentiate between system and user vars here
+	err = ctx.Set(ctx, varName, typ, value)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+
+	return value, nil
 }
 
 // Schema implements the sql.Node interface.

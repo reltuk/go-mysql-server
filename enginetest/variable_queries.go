@@ -55,19 +55,19 @@ var VariableQueries = []ScriptTest{
 	{
 		Name: "set system variable ON / OFF",
 		SetUpScript: []string{
-			"set @@autocommit = ON, sql_mode = \"\"",
+			"set @@autocommit = ON, sql_mode = OFF",
 		},
 		Query: "SELECT @@autocommit, @@session.sql_mode",
 		Expected: []sql.Row{
-			{1, ""},
+			{1, 0},
 		},
 	},
 	{
 		Name: "set system variable true / false quoted",
 		SetUpScript: []string{
-			`set @@autocommit = "true", default_table_encryption = "false"`,
+			`set @@autocommit = "true", sql_mode = "false"`,
 		},
-		Query: "SELECT @@autocommit, @@session.default_table_encryption",
+		Query: "SELECT @@autocommit, @@session.sql_mode",
 		Expected: []sql.Row{
 			{1, 0},
 		},
@@ -75,9 +75,9 @@ var VariableQueries = []ScriptTest{
 	{
 		Name: "set system variable true / false",
 		SetUpScript: []string{
-			`set @@autocommit = true, default_table_encryption = false`,
+			`set @@autocommit = true, sql_mode = false`,
 		},
-		Query: "SELECT @@autocommit, @@session.default_table_encryption",
+		Query: "SELECT @@autocommit, @@session.sql_mode",
 		Expected: []sql.Row{
 			{1, 0},
 		},
@@ -85,10 +85,10 @@ var VariableQueries = []ScriptTest{
 	{
 		Name: "set system variable with expressions",
 		SetUpScript: []string{
-			`set lc_messages = "123", @@auto_increment_increment = 1`,
-			`set lc_messages = concat(@@lc_messages, "456"), @@auto_increment_increment = @@auto_increment_increment + 3`,
+			`set sql_mode = "123", @@auto_increment_increment = 1`,
+			`set sql_mode = concat(@@sql_mode, "456"), @@auto_increment_increment = @@auto_increment_increment + 3`,
 		},
-		Query: "SELECT @@lc_messages, @@auto_increment_increment",
+		Query: "SELECT @@sql_mode, @@auto_increment_increment",
 		Expected: []sql.Row{
 			{"123456", 4},
 		},
@@ -128,21 +128,33 @@ var VariableQueries = []ScriptTest{
 	{
 		Name: "set system variable to bareword",
 		SetUpScript: []string{
-			`set @@sql_mode = ALLOW_INVALID_DATES`,
+			`set @@sql_mode = some_mode`,
 		},
 		Query: "SELECT @@sql_mode",
 		Expected: []sql.Row{
-			{"ALLOW_INVALID_DATES"},
+			{"some_mode"},
 		},
 	},
 	{
 		Name: "set system variable to bareword, unqualified",
 		SetUpScript: []string{
-			`set sql_mode = ALLOW_INVALID_DATES`,
+			`set sql_mode = some_mode`,
 		},
 		Query: "SELECT @@sql_mode",
 		Expected: []sql.Row{
-			{"ALLOW_INVALID_DATES"},
+			{"some_mode"},
+		},
+	},
+	// TODO: for compatibility, we allow unknown system variables to be set as well. For full MySQL emulation, we need to
+	//  list every system variable MySQL supports and reject all others.
+	{
+		Name: "set unknown system variable",
+		SetUpScript: []string{
+			`set dne = "hello"`,
+		},
+		Query: "SELECT @@dne",
+		Expected: []sql.Row{
+			{"hello"},
 		},
 	},
 	// User variables
@@ -197,129 +209,17 @@ var VariableQueries = []ScriptTest{
 			{1234, 1234},
 		},
 	},
-	{
-		Name: "local is session",
-		SetUpScript: []string{
-			`set @@LOCAL.cte_max_recursion_depth = 1234`,
-		},
-		Query: "SELECT @@SESSION.cte_max_recursion_depth",
-		Expected: []sql.Row{
-			{1234},
-		},
-	},
-	{
-		Name: "user and system var with same name",
-		SetUpScript: []string{
-			`set @cte_max_recursion_depth = 55`,
-			`set cte_max_recursion_depth = 77`,
-		},
-		Query: "SELECT @cte_max_recursion_depth, @@cte_max_recursion_depth",
-		Expected: []sql.Row{
-			{55, 77},
-		},
-	},
-	//TODO: do not override tables with user-var-like names...but why would you do this??
-	//{
-	//	Name: "user var table name no conflict",
-	//	SetUpScript: []string{
-	//		"create table test (pk bigint primary key, `@v1` bigint)",
-	//		`insert into test values (1, 123)`,
-	//		`set @v1 = 1234`,
-	//	},
-	//	Query: "SELECT @v1, `@v1` from test",
-	//	Expected: []sql.Row{
-	//		{1234, 123},
-	//	},
-	//},
 }
 
 var VariableErrorTests = []QueryErrorTest{
-	{
-		Query:       "set @@does_not_exist = 100",
-		ExpectedErr: sql.ErrUnknownSystemVariable,
-	},
+	// TODO: for compatibility, we allow unknown system variables to be set as well. For full MySQL emulation, we need to
+	//  list every system variable MySQL supports and reject all others.
+	// {
+	// 	Query:       "set @@does_not_exist = 100",
+	// 	ExpectedErr: sql.ErrUnknownSystemVariable,
+	// },
 	{
 		Query:       "set @myvar = bareword",
 		ExpectedErr: sql.ErrColumnNotFound,
-	},
-	{
-		Query:       "set @@sql_mode = true",
-		ExpectedErr: sql.ErrInvalidSystemVariableValue,
-	},
-	{
-		Query:       `set @@sql_mode = "NOT_AN_OPTION"`,
-		ExpectedErr: sql.ErrInvalidSetValue,
-	},
-	{
-		Query:       `set global core_file = true`,
-		ExpectedErr: sql.ErrSystemVariableReadOnly,
-	},
-	{
-		Query:       `set global require_row_format = on`,
-		ExpectedErr: sql.ErrSystemVariableSessionOnly,
-	},
-	{
-		Query:       `set session default_password_lifetime = 5`,
-		ExpectedErr: sql.ErrSystemVariableGlobalOnly,
-	},
-	{
-		Query:       `set @custom_var = default`,
-		ExpectedErr: sql.ErrUserVariableNoDefault,
-	},
-	{
-		Query:       `set session @@bulk_insert_buffer_size = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set global @@bulk_insert_buffer_size = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set session @@session.bulk_insert_buffer_size = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set session @@global.bulk_insert_buffer_size = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set global @@session.bulk_insert_buffer_size = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set global @@global.bulk_insert_buffer_size = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set session @myvar = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set global @myvar = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set @@session.@@bulk_insert_buffer_size = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set @@global.@@bulk_insert_buffer_size = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set @@session.@bulk_insert_buffer_size = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set @@global.@bulk_insert_buffer_size = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set @@session.@myvar = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
-	},
-	{
-		Query:       `set @@global.@myvar = 5`,
-		ExpectedErr: sql.ErrSyntaxError,
 	},
 }

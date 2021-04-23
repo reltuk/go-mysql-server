@@ -34,14 +34,14 @@ func TestShowVariables(t *testing.T) {
 	it, err := sv.RowIter(ctx, nil)
 	require.NoError(err)
 
-	vars := ctx.GetAllSessionVariables()
+	vars := ctx.GetAll()
 	for row, err := it.Next(); err == nil; row, err = it.Next() {
 		key := row[0].(string)
 		val := row[1]
 
 		t.Logf("key: %s\tval: %v\n", key, val)
 
-		require.Equal(vars[key], val)
+		require.Equal(vars[key].Value, val)
 		delete(vars, key)
 	}
 	if err != io.EOF {
@@ -52,12 +52,13 @@ func TestShowVariables(t *testing.T) {
 }
 
 func TestShowVariablesWithLike(t *testing.T) {
-	sv := NewShowVariables("%t_into_buffer_size")
+	sv := NewShowVariables("int%")
 	require.True(t, sv.Resolved())
 
 	context := sql.NewEmptyContext()
-	err := context.SetSessionVariable(context, "select_into_buffer_size", int64(8192))
-	require.NoError(t, err)
+	context.Set(context, "int1", sql.Int32, 1)
+	context.Set(context, "int2", sql.Int32, 2)
+	context.Set(context, "txt", sql.LongText, "abcdefghijklmnoprstuwxyz")
 
 	it, err := sv.RowIter(context, nil)
 	require.NoError(t, err)
@@ -66,7 +67,8 @@ func TestShowVariablesWithLike(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedRows := []sql.Row{
-		{"select_into_buffer_size", int64(8192)},
+		{"int1", 1},
+		{"int2", 2},
 	}
 
 	assert.Equal(t, expectedRows, rows)
