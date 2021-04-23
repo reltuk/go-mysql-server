@@ -172,24 +172,15 @@ func (s *BaseSession) SetUserVariable(ctx *Context, varName string, value interf
 
 // GetSessionVariable implements the Session interface.
 func (s *BaseSession) GetSessionVariable(ctx *Context, sysVarName string) (interface{}, error) {
-	sysVar, _, ok := SystemVariables.GetGlobal(sysVarName)
-	if !ok {
-		return nil, ErrUnknownSystemVariable.New(sysVarName)
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	val, ok := s.systemVars[strings.ToLower(sysVarName)]
 	if !ok {
-		s.systemVars[strings.ToLower(sysVarName)] = sysVar.Default
-		val = sysVar.Default
+		return nil, ErrUnknownSystemVariable.New(sysVarName)
 	}
 	return val, nil
 }
 
 // GetUserVariable implements the Session interface.
 func (s *BaseSession) GetUserVariable(ctx *Context, varName string) (Type, interface{}, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	val, ok := s.userVars[strings.ToLower(varName)]
 	if !ok {
 		return Null, nil, nil
