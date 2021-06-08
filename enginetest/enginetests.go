@@ -2582,7 +2582,9 @@ func TestVariables(t *testing.T, harness Harness) {
 			Expected: []sql.Row{{9002}},
 		},
 	} {
-		TestQueryWithContext(t, ctx1, engine, assertion.Query, assertion.Expected, nil, nil)
+		t.Run(assertion.Query, func(t *testing.T) {
+			TestQueryWithContext(t, ctx1, engine, assertion.Query, assertion.Expected, nil, nil)
+		})
 	}
 	ctx2 := sql.NewEmptyContext()
 	for _, assertion := range []ScriptTestAssertion{
@@ -2595,7 +2597,9 @@ func TestVariables(t *testing.T, harness Harness) {
 			Expected: []sql.Row{{9002}},
 		},
 	} {
-		TestQueryWithContext(t, ctx2, engine, assertion.Query, assertion.Expected, nil, nil)
+		t.Run(assertion.Query, func(t *testing.T) {
+			TestQueryWithContext(t, ctx2, engine, assertion.Query, assertion.Expected, nil, nil)
+		})
 	}
 }
 
