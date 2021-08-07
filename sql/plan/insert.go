@@ -430,7 +430,7 @@ func (i *insertIter) warnOnIgnorableError(err error) error {
 	// Check that this error is a part of the list of Ignorable Errors and create the relevant warning
 	for _, ie := range IgnorableErrors {
 		if ie.Is(err) {
-			sqlerr, _ := sql.CastSQLError(err)
+			sqlerr := sql.CastSQLError(err)
 
 			// Add a warning instead
 			i.ctx.Session.Warn(&sql.Warning{

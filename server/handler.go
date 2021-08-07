@@ -504,12 +504,7 @@ func (h *Handler) errorWrappedDoQuery(
 	callback func(*sqltypes.Result) error,
 ) error {
 	err := h.doQuery(c, query, bindings, callback)
-	err, ok := sql.CastSQLError(err)
-	if ok {
-		return nil
-	} else {
-		return err
-	}
+	return sql.CastSQLError(err)
 }
 
 // Periodically polls the connection socket to determine if it is has been closed by the client, sending an error on

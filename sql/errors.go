@@ -295,12 +295,12 @@ var (
 	ErrTableCopyingNotSupported = errors.NewKind("error: Table copying not supported")
 )
 
-func CastSQLError(err error) (*mysql.SQLError, bool) {
+func CastSQLError(err error) *mysql.SQLError {
 	if err == nil {
-		return nil, true
+		return nil
 	}
 	if mysqlErr, ok := err.(*mysql.SQLError); ok {
-		return mysqlErr, false
+		return mysqlErr
 	}
 
 	var code int
@@ -335,7 +335,7 @@ func CastSQLError(err error) (*mysql.SQLError, bool) {
 		code = mysql.ERUnknownError
 	}
 
-	return mysql.NewSQLError(code, sqlState, err.Error()), false
+	return mysql.NewSQLError(code, sqlState, err.Error())
 }
 
 type UniqueKeyError struct {
