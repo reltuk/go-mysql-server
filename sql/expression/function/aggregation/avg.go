@@ -85,10 +85,10 @@ func (a *Avg) NewBuffer(ctx *sql.Context) (sql.Row, error) {
 		rows = int64(0)
 	)
 
-        bufferChild, err := duplicateExpression(ctx, a.UnaryExpression.Child)
-        if err != nil {
-                return nil, err
-        }
+	bufferChild, err := duplicateExpression(ctx, a.UnaryExpression.Child)
+	if err != nil {
+		return nil, err
+	}
 
 	return sql.NewRow(bufferChild, sum, rows), nil
 }

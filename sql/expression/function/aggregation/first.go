@@ -60,10 +60,10 @@ func (f *First) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.
 // NewBuffer creates a new buffer to compute the result.
 func (f *First) NewBuffer(ctx *sql.Context) (sql.Row, error) {
 	bufferChild, err := duplicateExpression(ctx, f.UnaryExpression.Child)
-        if err != nil {
-                return nil, err
-        }
-        return sql.NewRow(bufferChild, nil), nil
+	if err != nil {
+		return nil, err
+	}
+	return sql.NewRow(bufferChild, nil), nil
 }
 
 // Update implements the Aggregation interface.

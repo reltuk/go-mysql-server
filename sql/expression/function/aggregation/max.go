@@ -69,11 +69,11 @@ func (m *Max) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.Ex
 
 // NewBuffer creates a new buffer to compute the result.
 func (m *Max) NewBuffer(ctx *sql.Context) (sql.Row, error) {
-        bufferChild, err := duplicateExpression(ctx, m.UnaryExpression.Child)
-        if err != nil {
-                return nil, err
-        }
-        return sql.NewRow(bufferChild, nil), nil
+	bufferChild, err := duplicateExpression(ctx, m.UnaryExpression.Child)
+	if err != nil {
+		return nil, err
+	}
+	return sql.NewRow(bufferChild, nil), nil
 }
 
 // Update implements the Aggregation interface.

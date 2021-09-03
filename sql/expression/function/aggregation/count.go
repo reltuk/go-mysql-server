@@ -43,10 +43,10 @@ func (c *Count) FunctionName() string {
 
 // NewBuffer creates a new buffer for the aggregation.
 func (c *Count) NewBuffer(ctx *sql.Context) (sql.Row, error) {
-        bufferChild, err := duplicateExpression(ctx, c.UnaryExpression.Child)
-        if err != nil {
-                return nil, err
-        }
+	bufferChild, err := duplicateExpression(ctx, c.UnaryExpression.Child)
+	if err != nil {
+		return nil, err
+	}
 
 	return sql.NewRow(bufferChild, int64(0)), nil
 }

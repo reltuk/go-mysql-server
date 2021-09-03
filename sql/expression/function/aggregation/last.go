@@ -59,10 +59,10 @@ func (l *Last) WithChildren(ctx *sql.Context, children ...sql.Expression) (sql.E
 
 // NewBuffer creates a new buffer to compute the result.
 func (l *Last) NewBuffer(ctx *sql.Context) (sql.Row, error) {
-        bufferChild, err := duplicateExpression(ctx, l.UnaryExpression.Child)
-        if err != nil {
-                return nil, err
-        }
+	bufferChild, err := duplicateExpression(ctx, l.UnaryExpression.Child)
+	if err != nil {
+		return nil, err
+	}
 
 	return sql.NewRow(bufferChild, nil), nil
 }
